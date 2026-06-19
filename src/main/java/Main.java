@@ -102,7 +102,7 @@ public class Main {
                     } else if (!inSingle && !inDouble) {
                         if (command.startsWith("2>>", i)) { redirIndex = i; opFound = "2>>"; break; }
                         if (command.startsWith("1>>", i)) { redirIndex = i; opFound = "1>>"; break; }
-                        if (command.startsWith(">>", i))  { redirIndex = i; opFound = ">>";  break; }
+                        if (command.startsWith(">>", i))  { redirIndex = i; opFound = ">>";  break; } 
                         if (command.startsWith("2>", i))  { redirIndex = i; opFound = "2>";  break; }
                         if (command.startsWith("1>", i))  { redirIndex = i; opFound = "1>";  break; }
                         if (command.startsWith(">", i))   { redirIndex = i; opFound = ">";   break; }
@@ -156,21 +156,23 @@ public class Main {
 
             PrintStream outStream = System.out;
             PrintStream errStream = System.err;
+            File outBackingFile = null;
+            File errBackingFile = null;
 
             try {
                 if (outputFile != null) {
-                    File f = new File(outputFile);
-                    if (f.getParentFile() != null) {
-                        f.getParentFile().mkdirs();
+                    outBackingFile = new File(outputFile).isAbsolute() ? new File(outputFile) : new File(currentDirectory, outputFile);
+                    if (outBackingFile.getParentFile() != null) {
+                        outBackingFile.getParentFile().mkdirs();
                     }
-                    outStream = new PrintStream(new java.io.FileOutputStream(f, appendOutput));
+                    outStream = new PrintStream(new java.io.FileOutputStream(outBackingFile, appendOutput));
                 }
                 if (errorFile != null) {
-                    File f = new File(errorFile);
-                    if (f.getParentFile() != null) {
-                        f.getParentFile().mkdirs();
+                    errBackingFile = new File(errorFile).isAbsolute() ? new File(errorFile) : new File(currentDirectory, errorFile);
+                    if (errBackingFile.getParentFile() != null) {
+                        errBackingFile.getParentFile().mkdirs();
                     }
-                    errStream = new PrintStream(new java.io.FileOutputStream(f, appendError));
+                    errStream = new PrintStream(new java.io.FileOutputStream(errBackingFile, appendError));
                 }
 
                 if (command.isEmpty()) {
@@ -212,6 +214,10 @@ public class Main {
                     continue;
                 }
 
+                if (baseCmd.equals("jobs")) {
+                    continue;
+                }
+
                 if (baseCmd.equals("echo")) {
                     StringBuilder output = new StringBuilder();
                     for (int i = 1; i < parts.length; i++) {
@@ -231,7 +237,7 @@ public class Main {
                     String cmd = parts[1];
 
                     if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")
-                            || cmd.equals("pwd") || cmd.equals("cd")) {
+                            || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs")) {
                         outStream.println(cmd + " is a shell builtin");
                         continue;
                     }
@@ -259,21 +265,21 @@ public class Main {
                     ProcessBuilder pb = new ProcessBuilder(parts);
                     pb.directory(new File(currentDirectory));
 
-                    if (outputFile != null) {
+                    if (outBackingFile != null) {
                         if (appendOutput) {
-                            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(outputFile)));
+                            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(outBackingFile));
                         } else {
-                            pb.redirectOutput(ProcessBuilder.Redirect.to(new File(outputFile)));
+                            pb.redirectOutput(ProcessBuilder.Redirect.to(outBackingFile));
                         }
                     } else {
                         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                     }
 
-                    if (errorFile != null) {
+                    if (errBackingFile != null) {
                         if (appendError) {
-                            pb.redirectError(ProcessBuilder.Redirect.appendTo(new File(errorFile)));
+                            pb.redirectError(ProcessBuilder.Redirect.appendTo(errBackingFile));
                         } else {
-                            pb.redirectError(ProcessBuilder.Redirect.to(new File(errorFile)));
+                            pb.redirectError(ProcessBuilder.Redirect.to(errBackingFile));
                         }
                     } else {
                         pb.redirectError(ProcessBuilder.Redirect.INHERIT);
@@ -282,7 +288,7 @@ public class Main {
                     Process process = pb.start();
                     process.waitFor();
                 } catch (Exception e) {
-                    errStream.println(command + ": command not found");
+                    errStream.println(baseCmd + ": not found");
                 }
 
             } catch (Exception e) {
