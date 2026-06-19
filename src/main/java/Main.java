@@ -1,6 +1,7 @@
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -58,6 +59,18 @@ public class Main {
         return parts.toArray(new String[0]);
     }
 
+    private static String cleanPath(String path) {
+        if (path == null) return null;
+        path = path.trim();
+        if (path.startsWith("'") && path.endsWith("'")) {
+            return path.substring(1, path.length() - 1);
+        }
+        if (path.startsWith("\"") && path.endsWith("\"")) {
+            return path.substring(1, path.length() - 1);
+        }
+        return path;
+    }
+
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
         String currentDirectory = System.getProperty("user.dir");
@@ -69,8 +82,25 @@ public class Main {
             String command = scanner.nextLine();
             String outputFile = null;
             String errorFile = null;
+            boolean appendOutput = false;
+            boolean appendError = false;
 
-            if (command.contains("2>")) {
+            if (command.contains("2>>")) {
+                String[] redirectionParts = command.split("2>>", 2);
+                command = redirectionParts[0].trim();
+                errorFile = redirectionParts[1].trim();
+                appendError = true;
+            } else if (command.contains("1>>")) {
+                String[] redirectionParts = command.split("1>>", 2);
+                command = redirectionParts[0].trim();
+                outputFile = redirectionParts[1].trim();
+                appendOutput = true;
+            } else if (command.contains(">>")) {
+                String[] redirectionParts = command.split(">>", 2);
+                command = redirectionParts[0].trim();
+                outputFile = redirectionParts[1].trim();
+                appendOutput = true;
+            } else if (command.contains("2>")) {
                 String[] redirectionParts = command.split("2>", 2);
                 command = redirectionParts[0].trim();
                 errorFile = redirectionParts[1].trim();
@@ -84,13 +114,20 @@ public class Main {
                 outputFile = redirectionParts[1].trim();
             }
 
+            outputFile = cleanPath(outputFile);
+            errorFile = cleanPath(errorFile);
+
             if (errorFile != null) {
                 try {
                     File f = new File(errorFile);
                     if (f.getParentFile() != null) {
                         f.getParentFile().mkdirs();
                     }
-                    Files.writeString(f.toPath(), "");
+                    if (!appendError) {
+                        Files.writeString(f.toPath(), "", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                    } else if (!f.exists()) {
+                        f.createNewFile();
+                    }
                 } catch (Exception e) {
                 }
             }
@@ -101,7 +138,11 @@ public class Main {
                     if (f.getParentFile() != null) {
                         f.getParentFile().mkdirs();
                     }
-                    Files.writeString(f.toPath(), "");
+                    if (!appendOutput) {
+                        Files.writeString(f.toPath(), "", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                    } else if (!f.exists()) {
+                        f.createNewFile();
+                    }
                 } catch (Exception e) {
                 }
             }
@@ -153,7 +194,19 @@ public class Main {
 
                 if (outputFile != null) {
                     try {
-                        Files.writeString(Paths.get(outputFile), output.toString() + System.lineSeparator());
+                        if (appendOutput) {
+                            Files.writeString(
+                                    Paths.get(outputFile),
+                                    output.toString() + System.lineSeparator(),
+                                    StandardOpenOption.CREATE, StandardOpenOption.APPEND
+                            );
+                        } else {
+                            Files.writeString(
+                                    Paths.get(outputFile),
+                                    output.toString() + System.lineSeparator(),
+                                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE
+                            );
+                        }
                     } catch (Exception e) {
                     }
                 } else {
@@ -197,10 +250,18 @@ public class Main {
                 pb.directory(new File(currentDirectory));
 
                 if (outputFile != null) {
-                    pb.redirectOutput(new File(outputFile));
+                    if (appendOutput) {
+                        pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(outputFile)));
+                    } else {
+                        pb.redirectOutput(ProcessBuilder.Redirect.to(new File(outputFile)));
+                    }
                 }
                 if (errorFile != null) {
-                    pb.redirectError(new File(errorFile));
+                    if (appendError) {
+                        pb.redirectError(ProcessBuilder.Redirect.appendTo(new File(errorFile)));
+                    } else {
+                        pb.redirectError(ProcessBuilder.Redirect.to(new File(errorFile)));
+                    }
                 }
 
                 Process process = pb.start();
