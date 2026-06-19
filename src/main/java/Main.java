@@ -15,15 +15,15 @@ public class Main {
         for (int i = 0; i < command.length(); i++) {
             char c = command.charAt(i);
 
-            if (!inSingleQuotes && !inDoubleQuotes && c == '\\') {
+            if (c == '\'' && !inDoubleQuotes) {
+                inSingleQuotes = !inSingleQuotes;
+            } else if (c == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+            } else if (c == '\\' && !inSingleQuotes && !inDoubleQuotes) {
                 if (i + 1 < command.length()) {
                     current.append(command.charAt(i + 1));
                     i++;
                 }
-            } else if (c == '\'' && !inDoubleQuotes) {
-                inSingleQuotes = !inSingleQuotes;
-            } else if (c == '"' && !inSingleQuotes) {
-                inDoubleQuotes = !inDoubleQuotes;
             } else if (Character.isWhitespace(c) && !inSingleQuotes && !inDoubleQuotes) {
                 if (current.length() > 0) {
                     parts.add(current.toString());
