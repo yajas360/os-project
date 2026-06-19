@@ -15,7 +15,12 @@ public class Main {
         for (int i = 0; i < command.length(); i++) {
             char c = command.charAt(i);
 
-            if (c == '\'' && !inDoubleQuotes) {
+            if (!inSingleQuotes && !inDoubleQuotes && c == '\\') {
+                if (i + 1 < command.length()) {
+                    current.append(command.charAt(i + 1));
+                    i++;
+                }
+            } else if (c == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
             } else if (c == '"' && !inSingleQuotes) {
                 inDoubleQuotes = !inDoubleQuotes;
