@@ -1,9 +1,7 @@
-
 import java.io.File;
 import java.util.Scanner;
 
 public class Main {
-
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
@@ -17,6 +15,11 @@ public class Main {
                 break;
             }
 
+            if (command.equals("pwd")) {
+                System.out.println(System.getProperty("user.dir"));
+                continue;
+            }
+
             if (command.startsWith("echo ")) {
                 System.out.println(command.substring(5));
                 continue;
@@ -25,7 +28,7 @@ public class Main {
             if (command.startsWith("type ")) {
                 String cmd = command.substring(5);
 
-                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")) {
+                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd")) {
                     System.out.println(cmd + " is a shell builtin");
                     continue;
                 }
@@ -53,40 +56,21 @@ public class Main {
             }
 
             String[] parts = command.split(" ");
-            String cmd = parts[0];
 
-            String pathEnv = System.getenv("PATH");
-            String[] paths = pathEnv.split(File.pathSeparator);
+            try {
+                ProcessBuilder pb = new ProcessBuilder(parts);
+                pb.redirectErrorStream(true);
 
-            File executable = null;
+                Process process = pb.start();
 
-            for (String path : paths) {
-                File file = new File(path, cmd);
+                Scanner outputScanner = new Scanner(process.getInputStream());
 
-                if (file.exists() && file.canExecute()) {
-                    executable = file;
-                    break;
+                while (outputScanner.hasNextLine()) {
+                    System.out.println(outputScanner.nextLine());
                 }
-            }
 
-            if (executable != null) {
-                try {
-                    ProcessBuilder pb = new ProcessBuilder(parts);
-                    pb.redirectErrorStream(true);
-
-                    Process process = pb.start();
-
-                    Scanner outputScanner = new Scanner(process.getInputStream());
-
-                    while (outputScanner.hasNextLine()) {
-                        System.out.println(outputScanner.nextLine());
-                    }
-
-                    process.waitFor();
-                } catch (Exception e) {
-                    System.out.println(command + ": command not found");
-                }
-            } else {
+                process.waitFor();
+            } catch (Exception e) {
                 System.out.println(command + ": command not found");
             }
         }
