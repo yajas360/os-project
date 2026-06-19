@@ -130,10 +130,17 @@ public class Main {
             try {
                 ProcessBuilder pb = new ProcessBuilder(p);
                 pb.directory(new File(dir));
-                if (outF != null) pb.redirectOutput(appOut ? ProcessBuilder.Redirect.appendTo(new File(outF)) : ProcessBuilder.Redirect.to(new File(outF)));
-                else pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                if (errF != null) pb.redirectError(appErr ? ProcessBuilder.Redirect.appendTo(new File(errF)) : ProcessBuilder.Redirect.to(new File(errF)));
-                else pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                
+                if (runBg) {
+                    pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                } else {
+                    if (outF != null) pb.redirectOutput(appOut ? ProcessBuilder.Redirect.appendTo(new File(outF)) : ProcessBuilder.Redirect.to(new File(outF)));
+                    else pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    if (errF != null) pb.redirectError(appErr ? ProcessBuilder.Redirect.appendTo(new File(errF)) : ProcessBuilder.Redirect.to(new File(errF)));
+                    else pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                }
+                
                 Process pr = pb.start();
                 if (runBg) System.out.println("[1] " + pr.pid());
                 else pr.waitFor();
