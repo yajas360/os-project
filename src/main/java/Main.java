@@ -1,4 +1,6 @@
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -68,6 +70,18 @@ public class Main {
 
             String command = scanner.nextLine();
 
+            String outputFile = null;
+
+            if (command.contains("1>")) {
+                String[] redirectionParts = command.split("1>", 2);
+                command = redirectionParts[0].trim();
+                outputFile = redirectionParts[1].trim();
+            } else if (command.contains(">")) {
+                String[] redirectionParts = command.split(">", 2);
+                command = redirectionParts[0].trim();
+                outputFile = redirectionParts[1].trim();
+            }
+
             if (command.equals("exit") || command.equals("exit 0")) {
                 break;
             }
@@ -108,14 +122,27 @@ public class Main {
             if (command.startsWith("echo")) {
                 String[] parts = parseCommand(command);
 
+                StringBuilder output = new StringBuilder();
+
                 for (int i = 1; i < parts.length; i++) {
                     if (i > 1) {
-                        System.out.print(" ");
+                        output.append(" ");
                     }
-                    System.out.print(parts[i]);
+                    output.append(parts[i]);
                 }
 
-                System.out.println();
+                if (outputFile != null) {
+                    try {
+                        Files.writeString(
+                                Paths.get(outputFile),
+                                output.toString() + System.lineSeparator()
+                        );
+                    } catch (Exception e) {
+                    }
+                } else {
+                    System.out.println(output);
+                }
+
                 continue;
             }
 
@@ -152,25 +179,34 @@ public class Main {
 
             String[] parts = parseCommand(command);
 
-            try {
-                ProcessBuilder pb = new ProcessBuilder(parts);
-                pb.directory(new File(currentDirectory));
-                pb.redirectErrorStream(true);
+          try {
+    ProcessBuilder pb = new ProcessBuilder(parts);
+    pb.directory(new File(currentDirectory));
 
-                Process process = pb.start();
-
-                Scanner outputScanner = new Scanner(process.getInputStream());
-
-                while (outputScanner.hasNextLine()) {
-                    System.out.println(outputScanner.nextLine());
-                }
-
-                process.waitFor();
-            } catch (Exception e) {
-                System.out.println(command + ": command not found");
-            }
-        }
-
-        scanner.close();
+    if (outputFile != null) {
+        pb.redirectOutput(new File(outputFile));
     }
+
+    Process process = pb.start();
+
+    Scanner outputScanner = new Scanner(process.getInputStream());
+    while (outputScanner.hasNextLine()) {
+        System.out.println(outputScanner.nextLine());
+    }
+
+    Scanner errorScanner = new Scanner(process.getErrorStream());
+    while (errorScanner.hasNextLine()) {
+        System.out.println(errorScanner.nextLine());
+    }
+
+    process.waitFor();
+
+}  catch (Exception e) {
+    System.out.println(command + ": command not found");
+}
+
+}
+
+scanner.close();
+}
 }
