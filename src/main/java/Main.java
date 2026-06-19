@@ -4,6 +4,7 @@ import java.util.Scanner;
 public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
+        String currentDirectory = System.getProperty("user.dir");
 
         while (true) {
             System.out.print("$ ");
@@ -15,8 +16,22 @@ public class Main {
                 break;
             }
 
+            if (command.startsWith("cd ")) {
+                String path = command.substring(3);
+
+                File dir = new File(path);
+
+                if (dir.exists() && dir.isDirectory()) {
+                    currentDirectory = dir.getAbsolutePath();
+                } else {
+                    System.out.println("cd: " + path + ": No such file or directory");
+                }
+
+                continue;
+            }
+
             if (command.equals("pwd")) {
-                System.out.println(System.getProperty("user.dir"));
+                System.out.println(currentDirectory);
                 continue;
             }
 
@@ -28,7 +43,8 @@ public class Main {
             if (command.startsWith("type ")) {
                 String cmd = command.substring(5);
 
-                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd")) {
+                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")
+                        || cmd.equals("pwd") || cmd.equals("cd")) {
                     System.out.println(cmd + " is a shell builtin");
                     continue;
                 }
@@ -59,6 +75,7 @@ public class Main {
 
             try {
                 ProcessBuilder pb = new ProcessBuilder(parts);
+                pb.directory(new File(currentDirectory));
                 pb.redirectErrorStream(true);
 
                 Process process = pb.start();
