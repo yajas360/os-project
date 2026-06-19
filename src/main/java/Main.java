@@ -19,11 +19,21 @@ public class Main {
             if (command.startsWith("cd ")) {
                 String path = command.substring(3);
 
-                File dir = new File(path);
+                File dir;
 
-                if (dir.exists() && dir.isDirectory()) {
-                    currentDirectory = dir.getAbsolutePath();
+                if (new File(path).isAbsolute()) {
+                    dir = new File(path);
                 } else {
+                    dir = new File(currentDirectory, path);
+                }
+
+                try {
+                    if (dir.exists() && dir.isDirectory()) {
+                        currentDirectory = dir.getCanonicalPath();
+                    } else {
+                        System.out.println("cd: " + path + ": No such file or directory");
+                    }
+                } catch (Exception e) {
                     System.out.println("cd: " + path + ": No such file or directory");
                 }
 
