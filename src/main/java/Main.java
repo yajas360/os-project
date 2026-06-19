@@ -19,10 +19,27 @@ public class Main {
                 inSingleQuotes = !inSingleQuotes;
             } else if (c == '"' && !inSingleQuotes) {
                 inDoubleQuotes = !inDoubleQuotes;
-            } else if (c == '\\' && !inSingleQuotes && !inDoubleQuotes) {
-                if (i + 1 < command.length()) {
-                    current.append(command.charAt(i + 1));
-                    i++;
+            } else if (c == '\\') {
+                if (inSingleQuotes) {
+                    current.append('\\');
+                } else if (inDoubleQuotes) {
+                    if (i + 1 < command.length()) {
+                        char next = command.charAt(i + 1);
+
+                        if (next == '"' || next == '\\') {
+                            current.append(next);
+                            i++;
+                        } else {
+                            current.append('\\');
+                        }
+                    } else {
+                        current.append('\\');
+                    }
+                } else {
+                    if (i + 1 < command.length()) {
+                        current.append(command.charAt(i + 1));
+                        i++;
+                    }
                 }
             } else if (Character.isWhitespace(c) && !inSingleQuotes && !inDoubleQuotes) {
                 if (current.length() > 0) {
