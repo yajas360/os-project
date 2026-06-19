@@ -1,7 +1,9 @@
+
 import java.io.File;
 import java.util.Scanner;
 
 public class Main {
+
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
@@ -50,7 +52,43 @@ public class Main {
                 continue;
             }
 
-            System.out.println(command + ": command not found");
+            String[] parts = command.split(" ");
+            String cmd = parts[0];
+
+            String pathEnv = System.getenv("PATH");
+            String[] paths = pathEnv.split(File.pathSeparator);
+
+            File executable = null;
+
+            for (String path : paths) {
+                File file = new File(path, cmd);
+
+                if (file.exists() && file.canExecute()) {
+                    executable = file;
+                    break;
+                }
+            }
+
+            if (executable != null) {
+                try {
+                    ProcessBuilder pb = new ProcessBuilder(parts);
+                    pb.redirectErrorStream(true);
+
+                    Process process = pb.start();
+
+                    Scanner outputScanner = new Scanner(process.getInputStream());
+
+                    while (outputScanner.hasNextLine()) {
+                        System.out.println(outputScanner.nextLine());
+                    }
+
+                    process.waitFor();
+                } catch (Exception e) {
+                    System.out.println(command + ": command not found");
+                }
+            } else {
+                System.out.println(command + ": command not found");
+            }
         }
 
         scanner.close();
