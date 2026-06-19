@@ -112,7 +112,14 @@ public class Main {
             if (b.equals("exit")) break;
             if (b.equals("pwd")) { writeOutput(dir, outF, appOut, false); continue; }
             if (b.equals("jobs")) {
-                for (Job j : jobs) System.out.printf("[%d]+  %-24s%s%n", j.id, "Running", j.cmd);
+                int size = jobs.size();
+                for (int i = 0; i < size; i++) {
+                    Job j = jobs.get(i);
+                    char marker = ' ';
+                    if (i == size - 1) marker = '+';
+                    else if (i == size - 2) marker = '-';
+                    System.out.printf("[%d]%c  %-24s%s%n", j.id, marker, "Running", j.cmd);
+                }
                 continue;
             }
             if (b.equals("cd")) {
