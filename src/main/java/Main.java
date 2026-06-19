@@ -19,6 +19,10 @@ public class Main {
             if (command.startsWith("cd ")) {
                 String path = command.substring(3);
 
+                if (path.startsWith("~")) {
+                    path = System.getProperty("user.home") + path.substring(1);
+                }
+
                 File dir;
 
                 if (new File(path).isAbsolute()) {
