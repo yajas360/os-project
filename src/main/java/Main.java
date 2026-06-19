@@ -6,6 +6,19 @@ import java.util.List;
 import java.util.Scanner;
 
 public class Main {
+    static class Job {
+        int id;
+        long pid;
+        String cmd;
+        Job(int id, long pid, String cmd) {
+            this.id = id;
+            this.pid = pid;
+            this.cmd = cmd;
+        }
+    }
+
+    private static List<Job> jobs = new ArrayList<>();
+    private static int jobCounter = 1;
 
     private static void writeOutput(String text, String file, boolean append, boolean isError) throws IOException {
         if (file != null) {
@@ -54,6 +67,7 @@ public class Main {
             if (input.isEmpty()) continue;
 
             boolean runBg = input.endsWith("&");
+            String rawInput = input;
             if (runBg) input = input.substring(0, input.length() - 1).trim();
 
             String outF = null, errF = null;
@@ -64,10 +78,10 @@ public class Main {
                 for (int i = 0; i < input.length(); i++) {
                     if (input.startsWith("2>>", i)) { idx = i; op = "2>>"; break; }
                     if (input.startsWith("1>>", i)) { idx = i; op = "1>>"; break; }
-                    if (input.startsWith(">>", i))  { idx = i; op = ">>"; break; }
-                    if (input.startsWith("2>", i))  { idx = i; op = "2>"; break; }
-                    if (input.startsWith("1>", i))  { idx = i; op = "1>"; break; }
-                    if (input.startsWith(">", i))   { idx = i; op = ">"; break; }
+                    if (input.startsWith(">>", i)) { idx = i; op = ">>"; break; }
+                    if (input.startsWith("2>", i)) { idx = i; op = "2>"; break; }
+                    if (input.startsWith("1>", i)) { idx = i; op = "1>"; break; }
+                    if (input.startsWith(">", i)) { idx = i; op = ">"; break; }
                 }
                 if (idx == -1) break;
                 String before = input.substring(0, idx).trim();
@@ -97,7 +111,10 @@ public class Main {
 
             if (b.equals("exit")) break;
             if (b.equals("pwd")) { writeOutput(dir, outF, appOut, false); continue; }
-            if (b.equals("jobs")) continue;
+            if (b.equals("jobs")) {
+                for (Job j : jobs) System.out.printf("[%d]+  %-24s%s%n", j.id, "Running", j.cmd);
+                continue;
+            }
             if (b.equals("cd")) {
                 String path = p.length > 1 ? p[1].replace("~", System.getenv("HOME")) : System.getenv("HOME");
                 File d = new File(path).isAbsolute() ? new File(path) : new File(dir, path);
@@ -114,7 +131,7 @@ public class Main {
             if (b.equals("type")) {
                 if (p.length < 2) continue;
                 String cmd = p[1];
-                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs")) 
+                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs"))
                     writeOutput(cmd + " is a shell builtin", outF, appOut, false);
                 else {
                     boolean found = false;
@@ -130,7 +147,6 @@ public class Main {
             try {
                 ProcessBuilder pb = new ProcessBuilder(p);
                 pb.directory(new File(dir));
-                
                 if (runBg) {
                     pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                     pb.redirectError(ProcessBuilder.Redirect.INHERIT);
@@ -140,10 +156,11 @@ public class Main {
                     if (errF != null) pb.redirectError(appErr ? ProcessBuilder.Redirect.appendTo(new File(errF)) : ProcessBuilder.Redirect.to(new File(errF)));
                     else pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                 }
-                
                 Process pr = pb.start();
-                if (runBg) System.out.println("[1] " + pr.pid());
-                else pr.waitFor();
+                if (runBg) {
+                    jobs.add(new Job(jobCounter++, pr.pid(), rawInput));
+                    System.out.println("[" + (jobCounter - 1) + "] " + pr.pid());
+                } else pr.waitFor();
             } catch (Exception e) {
                 System.out.println(b + ": command not found");
             }
