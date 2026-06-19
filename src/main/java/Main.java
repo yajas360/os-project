@@ -8,14 +8,18 @@ public class Main {
     private static String[] parseCommand(String command) {
         List<String> parts = new ArrayList<>();
         StringBuilder current = new StringBuilder();
+
         boolean inSingleQuotes = false;
+        boolean inDoubleQuotes = false;
 
         for (int i = 0; i < command.length(); i++) {
             char c = command.charAt(i);
 
-            if (c == '\'') {
+            if (c == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
-            } else if (Character.isWhitespace(c) && !inSingleQuotes) {
+            } else if (c == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+            } else if (Character.isWhitespace(c) && !inSingleQuotes && !inDoubleQuotes) {
                 if (current.length() > 0) {
                     parts.add(current.toString());
                     current.setLength(0);
