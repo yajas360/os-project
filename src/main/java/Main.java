@@ -1,7 +1,5 @@
 import java.io.File;
 import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -249,3 +247,54 @@ public class Main {
                             found = true;
                             break;
                         }
+                    }
+
+                    if (!found) {
+                        outStream.println(cmd + ": not found");
+                    }
+                    continue;
+                }
+
+                try {
+                    ProcessBuilder pb = new ProcessBuilder(parts);
+                    pb.directory(new File(currentDirectory));
+
+                    if (outputFile != null) {
+                        if (appendOutput) {
+                            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(outputFile)));
+                        } else {
+                            pb.redirectOutput(ProcessBuilder.Redirect.to(new File(outputFile)));
+                        }
+                    } else {
+                        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    if (errorFile != null) {
+                        if (appendError) {
+                            pb.redirectError(ProcessBuilder.Redirect.appendTo(new File(errorFile)));
+                        } else {
+                            pb.redirectError(ProcessBuilder.Redirect.to(new File(errorFile)));
+                        }
+                    } else {
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    Process process = pb.start();
+                    process.waitFor();
+                } catch (Exception e) {
+                    errStream.println(command + ": command not found");
+                }
+
+            } catch (Exception e) {
+            } finally {
+                if (outStream != System.out) {
+                    outStream.close();
+                }
+                if (errStream != System.err) {
+                    errStream.close();
+                }
+            }
+        }
+        scanner.close();
+    }
+}
