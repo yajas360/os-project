@@ -20,7 +20,7 @@ public class Main {
                 String path = command.substring(3);
 
                 if (path.startsWith("~")) {
-                    path = System.getProperty("user.home") + path.substring(1);
+                    path = System.getenv("HOME") + path.substring(1);
                 }
 
                 File dir;
@@ -35,10 +35,10 @@ public class Main {
                     if (dir.exists() && dir.isDirectory()) {
                         currentDirectory = dir.getCanonicalPath();
                     } else {
-                        System.out.println("cd: " + path + ": No such file or directory");
+                        System.out.println("cd: " + command.substring(3) + ": No such file or directory");
                     }
                 } catch (Exception e) {
-                    System.out.println("cd: " + path + ": No such file or directory");
+                    System.out.println("cd: " + command.substring(3) + ": No such file or directory");
                 }
 
                 continue;
