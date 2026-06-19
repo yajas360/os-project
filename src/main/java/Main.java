@@ -1,7 +1,37 @@
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
+
+    private static String[] parseCommand(String command) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inSingleQuotes = false;
+
+        for (int i = 0; i < command.length(); i++) {
+            char c = command.charAt(i);
+
+            if (c == '\'') {
+                inSingleQuotes = !inSingleQuotes;
+            } else if (Character.isWhitespace(c) && !inSingleQuotes) {
+                if (current.length() > 0) {
+                    parts.add(current.toString());
+                    current.setLength(0);
+                }
+            } else {
+                current.append(c);
+            }
+        }
+
+        if (current.length() > 0) {
+            parts.add(current.toString());
+        }
+
+        return parts.toArray(new String[0]);
+    }
+
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
         String currentDirectory = System.getProperty("user.dir");
@@ -49,8 +79,17 @@ public class Main {
                 continue;
             }
 
-            if (command.startsWith("echo ")) {
-                System.out.println(command.substring(5));
+            if (command.startsWith("echo")) {
+                String[] parts = parseCommand(command);
+
+                for (int i = 1; i < parts.length; i++) {
+                    if (i > 1) {
+                        System.out.print(" ");
+                    }
+                    System.out.print(parts[i]);
+                }
+
+                System.out.println();
                 continue;
             }
 
@@ -85,7 +124,7 @@ public class Main {
                 continue;
             }
 
-            String[] parts = command.split(" ");
+            String[] parts = parseCommand(command);
 
             try {
                 ProcessBuilder pb = new ProcessBuilder(parts);
