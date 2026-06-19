@@ -1,7 +1,7 @@
 import java.io.File;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -79,208 +79,173 @@ public class Main {
             System.out.print("$ ");
             System.out.flush();
 
+            if (!scanner.hasNextLine()) {
+                break;
+            }
+
             String command = scanner.nextLine();
             String outputFile = null;
             String errorFile = null;
             boolean appendOutput = false;
             boolean appendError = false;
 
-            if (command.contains("2>>")) {
-                String[] redirectionParts = command.split("2>>", 2);
-                command = redirectionParts[0].trim();
-                errorFile = redirectionParts[1].trim();
-                appendError = true;
-            } else if (command.contains("1>>")) {
-                String[] redirectionParts = command.split("1>>", 2);
-                command = redirectionParts[0].trim();
-                outputFile = redirectionParts[1].trim();
-                appendOutput = true;
-            } else if (command.contains(">>")) {
-                String[] redirectionParts = command.split(">>", 2);
-                command = redirectionParts[0].trim();
-                outputFile = redirectionParts[1].trim();
-                appendOutput = true;
-            } else if (command.contains("2>")) {
-                String[] redirectionParts = command.split("2>", 2);
-                command = redirectionParts[0].trim();
-                errorFile = redirectionParts[1].trim();
-            } else if (command.contains("1>")) {
-                String[] redirectionParts = command.split("1>", 2);
-                command = redirectionParts[0].trim();
-                outputFile = redirectionParts[1].trim();
-            } else if (command.contains(">")) {
-                String[] redirectionParts = command.split(">", 2);
-                command = redirectionParts[0].trim();
-                outputFile = redirectionParts[1].trim();
+            while (true) {
+                boolean inSingle = false;
+                boolean inDouble = false;
+                int redirIndex = -1;
+                String opFound = "";
+
+                for (int i = 0; i < command.length(); i++) {
+                    char c = command.charAt(i);
+                    if (c == '\'' && !inDouble) {
+                        inSingle = !inSingle;
+                    } else if (c == '"' && !inSingle) {
+                        inDouble = !inDouble;
+                    } else if (!inSingle && !inDouble) {
+                        if (command.startsWith("2>>", i)) { redirIndex = i; opFound = "2>>"; break; }
+                        if (command.startsWith("1>>", i)) { redirIndex = i; opFound = "1>>"; break; }
+                        if (command.startsWith(">>", i))  { redirIndex = i; opFound = ">>";  break; }
+                        if (command.startsWith("2>", i))  { redirIndex = i; opFound = "2>";  break; }
+                        if (command.startsWith("1>", i))  { redirIndex = i; opFound = "1>";  break; }
+                        if (command.startsWith(">", i))   { redirIndex = i; opFound = ">";   break; }
+                    }
+                }
+
+                if (redirIndex == -1) {
+                    break;
+                }
+
+                String before = command.substring(0, redirIndex).trim();
+                String after = command.substring(redirIndex + opFound.length()).trim();
+
+                int fileEnd = after.length();
+                boolean fSingle = false;
+                boolean fDouble = false;
+                for (int j = 0; j < after.length(); j++) {
+                    char ac = after.charAt(j);
+                    if (ac == '\'' && !fDouble) {
+                        fSingle = !fSingle;
+                    } else if (ac == '"' && !fSingle) {
+                        fDouble = !fDouble;
+                    } else if (Character.isWhitespace(ac) && !fSingle && !fDouble) {
+                        fileEnd = j;
+                        break;
+                    }
+                }
+
+                String filename = after.substring(0, fileEnd).trim();
+                String rest = after.substring(fileEnd).trim();
+
+                if (opFound.equals(">") || opFound.equals("1>")) {
+                    outputFile = filename;
+                    appendOutput = false;
+                } else if (opFound.equals(">>") || opFound.equals("1>>")) {
+                    outputFile = filename;
+                    appendOutput = true;
+                } else if (opFound.equals("2>")) {
+                    errorFile = filename;
+                    appendError = false;
+                } else if (opFound.equals("2>>")) {
+                    errorFile = filename;
+                    appendError = true;
+                }
+
+                command = (before + " " + rest).trim();
             }
 
             outputFile = cleanPath(outputFile);
             errorFile = cleanPath(errorFile);
 
-            if (errorFile != null) {
-                try {
-                    File f = new File(errorFile);
-                    if (f.getParentFile() != null) {
-                        f.getParentFile().mkdirs();
-                    }
-                    if (!appendError) {
-                        Files.writeString(f.toPath(), "", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-                    } else if (!f.exists()) {
-                        f.createNewFile();
-                    }
-                } catch (Exception e) {
-                }
-            }
-            
-            if (outputFile != null) {
-                try {
+            PrintStream outStream = System.out;
+            PrintStream errStream = System.err;
+
+            try {
+                if (outputFile != null) {
                     File f = new File(outputFile);
                     if (f.getParentFile() != null) {
                         f.getParentFile().mkdirs();
                     }
-                    if (!appendOutput) {
-                        Files.writeString(f.toPath(), "", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-                    } else if (!f.exists()) {
-                        f.createNewFile();
+                    outStream = new PrintStream(new java.io.FileOutputStream(f, appendOutput));
+                }
+                if (errorFile != null) {
+                    File f = new File(errorFile);
+                    if (f.getParentFile() != null) {
+                        f.getParentFile().mkdirs();
                     }
-                } catch (Exception e) {
-                }
-            }
-
-            if (command.equals("exit") || command.equals("exit 0")) {
-                break;
-            }
-
-            if (command.startsWith("cd ")) {
-                String path = command.substring(3);
-                if (path.startsWith("~")) {
-                    path = System.getenv("HOME") + path.substring(1);
+                    errStream = new PrintStream(new java.io.FileOutputStream(f, appendError));
                 }
 
-                File dir;
-                if (new File(path).isAbsolute()) {
-                    dir = new File(path);
-                } else {
-                    dir = new File(currentDirectory, path);
-                }
-
-                try {
-                    if (dir.exists() && dir.isDirectory()) {
-                        currentDirectory = dir.getCanonicalPath();
-                    } else {
-                        System.out.println("cd: " + command.substring(3) + ": No such file or directory");
-                    }
-                } catch (Exception e) {
-                    System.out.println("cd: " + command.substring(3) + ": No such file or directory");
-                }
-                continue;
-            }
-
-            if (command.equals("pwd")) {
-                System.out.println(currentDirectory);
-                continue;
-            }
-
-            if (command.startsWith("echo")) {
-                String[] parts = parseCommand(command);
-                StringBuilder output = new StringBuilder();
-
-                for (int i = 1; i < parts.length; i++) {
-                    if (i > 1) {
-                        output.append(" ");
-                    }
-                    output.append(parts[i]);
-                }
-
-                if (outputFile != null) {
-                    try {
-                        if (appendOutput) {
-                            Files.writeString(
-                                    Paths.get(outputFile),
-                                    output.toString() + System.lineSeparator(),
-                                    StandardOpenOption.CREATE, StandardOpenOption.APPEND
-                            );
-                        } else {
-                            Files.writeString(
-                                    Paths.get(outputFile),
-                                    output.toString() + System.lineSeparator(),
-                                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE
-                            );
-                        }
-                    } catch (Exception e) {
-                    }
-                } else {
-                    System.out.println(output);
-                }
-                continue;
-            }
-
-            if (command.startsWith("type ")) {
-                String cmd = command.substring(5);
-
-                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")
-                        || cmd.equals("pwd") || cmd.equals("cd")) {
-                    System.out.println(cmd + " is a shell builtin");
+                if (command.isEmpty()) {
                     continue;
                 }
 
-                String pathEnv = System.getenv("PATH");
-                String[] paths = pathEnv.split(File.pathSeparator);
-                boolean found = false;
+                if (command.equals("exit") || command.equals("exit 0")) {
+                    break;
+                }
 
-                for (String path : paths) {
-                    File file = new File(path, cmd);
-                    if (file.exists() && file.canExecute()) {
-                        System.out.println(cmd + " is " + file.getAbsolutePath());
-                        found = true;
-                        break;
+                String[] parts = parseCommand(command);
+                if (parts.length == 0) {
+                    continue;
+                }
+                String baseCmd = parts[0];
+
+                if (baseCmd.equals("cd")) {
+                    String path = parts.length > 1 ? parts[1] : System.getenv("HOME");
+                    if (path.startsWith("~")) {
+                        path = System.getenv("HOME") + path.substring(1);
                     }
-                }
 
-                if (!found) {
-                    System.out.println(cmd + ": not found");
-                }
-                continue;
-            }
+                    File dir = new File(path).isAbsolute() ? new File(path) : new File(currentDirectory, path);
 
-            String[] parts = parseCommand(command);
-
-            try {
-                ProcessBuilder pb = new ProcessBuilder(parts);
-                pb.directory(new File(currentDirectory));
-
-                if (outputFile != null) {
-                    if (appendOutput) {
-                        pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(outputFile)));
-                    } else {
-                        pb.redirectOutput(ProcessBuilder.Redirect.to(new File(outputFile)));
+                    try {
+                        if (dir.exists() && dir.isDirectory()) {
+                            currentDirectory = dir.getCanonicalPath();
+                        } else {
+                            errStream.println("cd: " + path + ": No such file or directory");
+                        }
+                    } catch (Exception e) {
+                        errStream.println("cd: " + path + ": No such file or directory");
                     }
+                    continue;
                 }
-                if (errorFile != null) {
-                    if (appendError) {
-                        pb.redirectError(ProcessBuilder.Redirect.appendTo(new File(errorFile)));
-                    } else {
-                        pb.redirectError(ProcessBuilder.Redirect.to(new File(errorFile)));
+
+                if (baseCmd.equals("pwd")) {
+                    outStream.println(currentDirectory);
+                    continue;
+                }
+
+                if (baseCmd.equals("echo")) {
+                    StringBuilder output = new StringBuilder();
+                    for (int i = 1; i < parts.length; i++) {
+                        if (i > 1) {
+                            output.append(" ");
+                        }
+                        output.append(parts[i]);
                     }
+                    outStream.println(output.toString());
+                    continue;
                 }
 
-                Process process = pb.start();
+                if (baseCmd.equals("type")) {
+                    if (parts.length < 2) {
+                        continue;
+                    }
+                    String cmd = parts[1];
 
-                Scanner outputScanner = new Scanner(process.getInputStream());
-                while (outputScanner.hasNextLine()) {
-                    System.out.println(outputScanner.nextLine());
-                }
+                    if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")
+                            || cmd.equals("pwd") || cmd.equals("cd")) {
+                        outStream.println(cmd + " is a shell builtin");
+                        continue;
+                    }
 
-                Scanner errorScanner = new Scanner(process.getErrorStream());
-                while (errorScanner.hasNextLine()) {
-                    System.out.println(errorScanner.nextLine());
-                }
+                    String pathEnv = System.getenv("PATH");
+                    String[] paths = pathEnv != null ? pathEnv.split(File.pathSeparator) : new String[0];
+                    boolean found = false;
 
-                process.waitFor();
-            } catch (Exception e) {
-                System.out.println(command + ": command not found");
-            }
-        }
-        scanner.close();
-    }
-}
+                    for (String path : paths) {
+                        File file = new File(path, cmd);
+                        if (file.exists() && file.canExecute()) {
+                            outStream.println(cmd + " is " + file.getAbsolutePath());
+                            found = true;
+                            break;
+                        }
