@@ -10,7 +10,6 @@ public class Main {
     private static String[] parseCommand(String command) {
         List<String> parts = new ArrayList<>();
         StringBuilder current = new StringBuilder();
-
         boolean inSingleQuotes = false;
         boolean inDoubleQuotes = false;
 
@@ -27,7 +26,6 @@ public class Main {
                 } else if (inDoubleQuotes) {
                     if (i + 1 < command.length()) {
                         char next = command.charAt(i + 1);
-
                         if (next == '"' || next == '\\') {
                             current.append(next);
                             i++;
@@ -69,10 +67,14 @@ public class Main {
             System.out.flush();
 
             String command = scanner.nextLine();
-
             String outputFile = null;
+            String errorFile = null;
 
-            if (command.contains("1>")) {
+            if (command.contains("2>")) {
+                String[] redirectionParts = command.split("2>", 2);
+                command = redirectionParts[0].trim();
+                errorFile = redirectionParts[1].trim();
+            } else if (command.contains("1>")) {
                 String[] redirectionParts = command.split("1>", 2);
                 command = redirectionParts[0].trim();
                 outputFile = redirectionParts[1].trim();
@@ -82,19 +84,39 @@ public class Main {
                 outputFile = redirectionParts[1].trim();
             }
 
+            if (errorFile != null) {
+                try {
+                    File f = new File(errorFile);
+                    if (f.getParentFile() != null) {
+                        f.getParentFile().mkdirs();
+                    }
+                    Files.writeString(f.toPath(), "");
+                } catch (Exception e) {
+                }
+            }
+            
+            if (outputFile != null) {
+                try {
+                    File f = new File(outputFile);
+                    if (f.getParentFile() != null) {
+                        f.getParentFile().mkdirs();
+                    }
+                    Files.writeString(f.toPath(), "");
+                } catch (Exception e) {
+                }
+            }
+
             if (command.equals("exit") || command.equals("exit 0")) {
                 break;
             }
 
             if (command.startsWith("cd ")) {
                 String path = command.substring(3);
-
                 if (path.startsWith("~")) {
                     path = System.getenv("HOME") + path.substring(1);
                 }
 
                 File dir;
-
                 if (new File(path).isAbsolute()) {
                     dir = new File(path);
                 } else {
@@ -110,7 +132,6 @@ public class Main {
                 } catch (Exception e) {
                     System.out.println("cd: " + command.substring(3) + ": No such file or directory");
                 }
-
                 continue;
             }
 
@@ -121,7 +142,6 @@ public class Main {
 
             if (command.startsWith("echo")) {
                 String[] parts = parseCommand(command);
-
                 StringBuilder output = new StringBuilder();
 
                 for (int i = 1; i < parts.length; i++) {
@@ -133,16 +153,12 @@ public class Main {
 
                 if (outputFile != null) {
                     try {
-                        Files.writeString(
-                                Paths.get(outputFile),
-                                output.toString() + System.lineSeparator()
-                        );
+                        Files.writeString(Paths.get(outputFile), output.toString() + System.lineSeparator());
                     } catch (Exception e) {
                     }
                 } else {
                     System.out.println(output);
                 }
-
                 continue;
             }
 
@@ -157,12 +173,10 @@ public class Main {
 
                 String pathEnv = System.getenv("PATH");
                 String[] paths = pathEnv.split(File.pathSeparator);
-
                 boolean found = false;
 
                 for (String path : paths) {
                     File file = new File(path, cmd);
-
                     if (file.exists() && file.canExecute()) {
                         System.out.println(cmd + " is " + file.getAbsolutePath());
                         found = true;
@@ -173,40 +187,39 @@ public class Main {
                 if (!found) {
                     System.out.println(cmd + ": not found");
                 }
-
                 continue;
             }
 
             String[] parts = parseCommand(command);
 
-          try {
-    ProcessBuilder pb = new ProcessBuilder(parts);
-    pb.directory(new File(currentDirectory));
+            try {
+                ProcessBuilder pb = new ProcessBuilder(parts);
+                pb.directory(new File(currentDirectory));
 
-    if (outputFile != null) {
-        pb.redirectOutput(new File(outputFile));
+                if (outputFile != null) {
+                    pb.redirectOutput(new File(outputFile));
+                }
+                if (errorFile != null) {
+                    pb.redirectError(new File(errorFile));
+                }
+
+                Process process = pb.start();
+
+                Scanner outputScanner = new Scanner(process.getInputStream());
+                while (outputScanner.hasNextLine()) {
+                    System.out.println(outputScanner.nextLine());
+                }
+
+                Scanner errorScanner = new Scanner(process.getErrorStream());
+                while (errorScanner.hasNextLine()) {
+                    System.out.println(errorScanner.nextLine());
+                }
+
+                process.waitFor();
+            } catch (Exception e) {
+                System.out.println(command + ": command not found");
+            }
+        }
+        scanner.close();
     }
-
-    Process process = pb.start();
-
-    Scanner outputScanner = new Scanner(process.getInputStream());
-    while (outputScanner.hasNextLine()) {
-        System.out.println(outputScanner.nextLine());
-    }
-
-    Scanner errorScanner = new Scanner(process.getErrorStream());
-    while (errorScanner.hasNextLine()) {
-        System.out.println(errorScanner.nextLine());
-    }
-
-    process.waitFor();
-
-}  catch (Exception e) {
-    System.out.println(command + ": command not found");
-}
-
-}
-
-scanner.close();
-}
 }
