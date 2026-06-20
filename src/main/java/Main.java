@@ -166,7 +166,7 @@ public class Main {
         List<BackgroundJob> backgroundJobs = new ArrayList<>();
 
         while (true) {
-            // Give OS a deterministic window to clean process descriptors before printing prompt
+            // Give OS descriptive structure structures a brief sync down to Java
             Thread.sleep(40);
 
             // --- Automatic Reaping Before Prompt ---
@@ -199,97 +199,126 @@ public class Main {
             }
             if (parts.length == 0) continue;
 
-            // --- Pipeline Detection ---
-            int pipeIndex = -1;
-            for (int i = 0; i < parts.length; i++) {
-                if (parts[i].equals("|")) { pipeIndex = i; break; }
+            // --- Multi-Stage Pipeline Detection & Setup ---
+            List<List<String>> pipelineStages = new ArrayList<>();
+            List<String> currentStage = new ArrayList<>();
+            
+            for (String part : parts) {
+                if (part.equals("|")) {
+                    if (!currentStage.isEmpty()) {
+                        pipelineStages.add(new ArrayList<>(currentStage));
+                        currentStage.clear();
+                    }
+                } else {
+                    currentStage.add(part);
+                }
+            }
+            if (!currentStage.isEmpty()) {
+                pipelineStages.add(currentStage);
             }
 
-            if (pipeIndex != -1) {
-                String[] parts1 = new String[pipeIndex];
-                System.arraycopy(parts, 0, parts1, 0, pipeIndex);
-                String[] parts2 = new String[parts.length - pipeIndex - 1];
-                System.arraycopy(parts, pipeIndex + 1, parts2, 0, parts2.length);
+            if (pipelineStages.size() > 1) {
+                int numStages = pipelineStages.size();
+                PipedOutputStream[] pipelinesOut = new PipedOutputStream[numStages - 1];
+                PipedInputStream[] pipelinesIn = new PipedInputStream[numStages - 1];
+                
+                for (int i = 0; i < numStages - 1; i++) {
+                    pipelinesOut[i] = new PipedOutputStream();
+                    pipelinesIn[i] = new PipedInputStream(pipelinesOut[i]);
+                }
 
-                RedirectionResult red1 = parseRedirections(parts1);
-                RedirectionResult red2 = parseRedirections(parts2);
-
-                touchRedirectionFiles(red1);
-                touchRedirectionFiles(red2);
-
-                PipedOutputStream pipeOut = new PipedOutputStream();
-                PipedInputStream pipeIn = new PipedInputStream(pipeOut);
-
+                List<Thread> pipelineThreads = new ArrayList<>();
                 File currentDirFinal = currentDirectory;
 
-                Thread stage1Thread = new Thread(() -> {
-                    try (PrintStream outStream = new PrintStream(pipeOut, true)) {
-                        if (isBuiltIn(red1.cleanedArgs[0])) {
-                            executeBuiltIn(red1.cleanedArgs, System.in, outStream, currentDirFinal, backgroundJobs);
-                        } else {
-                            File exec1 = findExecutable(red1.cleanedArgs[0]);
-                            if (exec1 == null) {
-                                System.err.println(red1.cleanedArgs[0] + ": command not found");
-                                return;
-                            }
-                            ProcessBuilder pb1 = new ProcessBuilder(red1.cleanedArgs).directory(currentDirFinal);
-                            pb1.redirectInput(ProcessBuilder.Redirect.INHERIT);
-                            pb1.redirectOutput(ProcessBuilder.Redirect.PIPE);
-                            Process p1 = pb1.start();
+                for (int i = 0; i < numStages; i++) {
+                    final int stageIdx = i;
+                    String[] stageParts = pipelineStages.get(stageIdx).toArray(new String[0]);
+                    RedirectionResult stageRed = parseRedirections(stageParts);
+                    touchRedirectionFiles(stageRed);
 
-                            try (InputStream procOut = p1.getInputStream()) {
-                                flushTransfer(procOut, outStream);
+                    Thread stageThread = new Thread(() -> {
+                        try {
+                            InputStream inputSource = System.in;
+                            if (stageIdx > 0) {
+                                inputSource = pipelinesIn[stageIdx - 1];
                             }
-                            p1.waitFor();
-                        }
-                    } catch (Exception e) {
-                        // Quiet exit
-                    }
-                });
 
-                Thread stage2Thread = new Thread(() -> {
-                    try {
-                        PrintStream destinationOut = System.out;
-                        if (red2.outputFile != null) {
-                            destinationOut = new PrintStream(new FileOutputStream(red2.outputFile, red2.appendOutput), true);
-                        }
-
-                        if (isBuiltIn(red2.cleanedArgs[0])) {
-                            executeBuiltIn(red2.cleanedArgs, pipeIn, destinationOut, currentDirFinal, backgroundJobs);
-                        } else {
-                            File exec2 = findExecutable(red2.cleanedArgs[0]);
-                            if (exec2 == null) {
-                                System.err.println(red2.cleanedArgs[0] + ": command not found");
-                                return;
+                            PrintStream outputSink = System.out;
+                            if (stageIdx < numStages - 1) {
+                                outputSink = new PrintStream(pipelinesOut[stageIdx], true);
+                            } else if (stageRed.outputFile != null) {
+                                outputSink = new PrintStream(new FileOutputStream(stageRed.outputFile, stageRed.appendOutput), true);
                             }
-                            ProcessBuilder pb2 = new ProcessBuilder(red2.cleanedArgs).directory(currentDirFinal);
-                            pb2.redirectInput(ProcessBuilder.Redirect.PIPE);
-                            
-                            if (red2.outputFile != null) {
-                                pb2.redirectOutput(red2.appendOutput ? ProcessBuilder.Redirect.appendTo(new File(red2.outputFile)) : ProcessBuilder.Redirect.to(new File(red2.outputFile)));
+
+                            if (isBuiltIn(stageRed.cleanedArgs[0])) {
+                                executeBuiltIn(stageRed.cleanedArgs, inputSource, outputSink, currentDirFinal, backgroundJobs);
+                                if (stageIdx < numStages - 1) {
+                                    outputSink.close();
+                                }
                             } else {
-                                pb2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                            }
+                                File exec = findExecutable(stageRed.cleanedArgs[0]);
+                                if (exec == null) {
+                                    System.err.println(stageRed.cleanedArgs[0] + ": command not found");
+                                    return;
+                                }
 
-                            Process p2 = pb2.start();
+                                ProcessBuilder pb = new ProcessBuilder(stageRed.cleanedArgs).directory(currentDirFinal);
+                                
+                                if (stageIdx > 0) {
+                                    pb.redirectInput(ProcessBuilder.Redirect.PIPE);
+                                } else {
+                                    pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+                                }
 
-                            try (OutputStream procIn = p2.getOutputStream()) {
-                                flushTransfer(pipeIn, procIn);
+                                if (stageIdx < numStages - 1) {
+                                    pb.redirectOutput(ProcessBuilder.Redirect.PIPE);
+                                } else if (stageRed.outputFile != null) {
+                                    pb.redirectOutput(stageRed.appendOutput ? ProcessBuilder.Redirect.appendTo(new File(stageRed.outputFile)) : ProcessBuilder.Redirect.to(new File(stageRed.outputFile)));
+                                } else {
+                                    pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                                }
+
+                                if (stageRed.errorFile != null) {
+                                    pb.redirectError(stageRed.appendError ? ProcessBuilder.Redirect.appendTo(new File(stageRed.errorFile)) : ProcessBuilder.Redirect.to(new File(stageRed.errorFile)));
+                                } else {
+                                    pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                                }
+
+                                Process p = pb.start();
+
+                                if (stageIdx > 0) {
+                                    try (OutputStream procStdin = p.getOutputStream()) {
+                                        flushTransfer(inputSource, procStdin);
+                                    }
+                                }
+
+                                if (stageIdx < numStages - 1) {
+                                    try (InputStream procStdout = p.getInputStream();
+                                         OutputStream nextStageSink = pipelinesOut[stageIdx]) {
+                                        flushTransfer(procStdout, nextStageSink);
+                                    }
+                                }
+
+                                p.waitFor();
                             }
-                            p2.waitFor();
+                        } catch (Exception e) {
+                            // Graceful short-circuit breakdown
+                        } finally {
+                            try {
+                                if (stageIdx > 0) pipelinesIn[stageIdx - 1].close();
+                                if (stageIdx < numStages - 1) pipelinesOut[stageIdx].close();
+                            } catch (IOException ignored) {}
                         }
-                        if (red2.outputFile != null) destinationOut.close();
-                    } catch (Exception e) {
-                        // Quiet exit
-                    }
-                });
+                    });
 
-                stage1Thread.start();
-                stage2Thread.start();
+                    pipelineThreads.add(stageThread);
+                    stageThread.start();
+                }
 
                 if (!runInBackground) {
-                    stage1Thread.join();
-                    stage2Thread.join();
+                    for (Thread t : pipelineThreads) {
+                        t.join();
+                    }
                 }
                 continue;
             }
