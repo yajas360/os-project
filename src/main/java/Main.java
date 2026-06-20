@@ -86,6 +86,9 @@ public class Main {
         
         // List to hold active background jobs
         List<BackgroundJob> backgroundJobs = new ArrayList<>();
+        
+        // Persistent global counter to guarantee stable, sequential job IDs
+        int jobCounter = 0;
 
         while (true) {
             System.out.print("$ ");
@@ -220,7 +223,7 @@ public class Main {
                             Files.write(
                                     Paths.get(errorFile),
                                     (err + System.lineSeparator()).getBytes()
-                            );
+                        );
                         }
                     } else {
                         System.out.println(err);
@@ -269,7 +272,7 @@ public class Main {
             }
 
             if (cmd.equals("jobs")) {
-                // First, check and update statuses of background processes asynchronously
+                // 1. Scan and capture completed jobs asynchronously first
                 for (BackgroundJob job : backgroundJobs) {
                     if (job.status.equals("Running") && !job.process.isAlive()) {
                         job.status = "Done";
@@ -279,6 +282,7 @@ public class Main {
                 StringBuilder jobsOutput = new StringBuilder();
                 int numJobs = backgroundJobs.size();
 
+                // 2. Generate visualization with contextual dynamic markers
                 for (int i = 0; i < numJobs; i++) {
                     BackgroundJob job = backgroundJobs.get(i);
                     
@@ -289,7 +293,6 @@ public class Main {
                         marker = '-';
                     }
 
-                    // Done status omits the trailing '&', Running status keeps it
                     String displayCommand = job.command;
                     if (job.status.equals("Running")) {
                         displayCommand += " &";
@@ -318,7 +321,7 @@ public class Main {
                     }
                 }
 
-                // Reap finalized 'Done' jobs from the data structure so subsequent calls do not show them
+                // 3. Reap completed 'Done' items from tracking list *after* displaying them once
                 backgroundJobs.removeIf(job -> job.status.equals("Done"));
 
                 continue;
@@ -443,16 +446,15 @@ public class Main {
                 Process process = pb.start();
                 
                 if (runInBackground) {
-                    int nextJobId = backgroundJobs.size() + 1;
+                    jobCounter++;
+                    int nextJobId = jobCounter;
                     System.out.printf("[%d] %d%n", nextJobId, process.pid());
                     
-                    // Clean trailing '&' out of the stored tracking string safely
                     String cleanedCommand = command.trim();
                     if (cleanedCommand.endsWith("&")) {
                         cleanedCommand = cleanedCommand.substring(0, cleanedCommand.length() - 1).trim();
                     }
                     
-                    // Track background process reference explicitly
                     backgroundJobs.add(new BackgroundJob(nextJobId, process.pid(), "Running", cleanedCommand, process));
                 } else {
                     process.waitFor();
