@@ -86,7 +86,6 @@ public class Main {
         
         // List to hold active background jobs
         List<BackgroundJob> backgroundJobs = new ArrayList<>();
-        int jobCounter = 0;
 
         while (true) {
             // --- POINT 1: Automatic Reaping Before Each Prompt ---
@@ -474,8 +473,20 @@ public class Main {
                 Process process = pb.start();
                 
                 if (runInBackground) {
-                    jobCounter++;
-                    int nextJobId = jobCounter;
+                    // --- Dynamic Recycling Index Logic ---
+                    int nextJobId;
+                    if (backgroundJobs.isEmpty()) {
+                        nextJobId = 1;
+                    } else {
+                        int maxJobId = 0;
+                        for (BackgroundJob job : backgroundJobs) {
+                            if (job.jobId > maxJobId) {
+                                maxJobId = job.jobId;
+                            }
+                        }
+                        nextJobId = maxJobId + 1;
+                    }
+
                     System.out.printf("[%d] %d%n", nextJobId, process.pid());
                     
                     String cleanedCommand = command.trim();
