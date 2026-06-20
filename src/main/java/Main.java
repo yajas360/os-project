@@ -86,11 +86,38 @@ public class Main {
         
         // List to hold active background jobs
         List<BackgroundJob> backgroundJobs = new ArrayList<>();
-        
-        // Persistent global counter to guarantee stable, sequential job IDs
         int jobCounter = 0;
 
         while (true) {
+            // --- POINT 1: Automatic Reaping Before Each Prompt ---
+            // 1. Scan and update statuses of background processes asynchronously
+            for (BackgroundJob job : backgroundJobs) {
+                if (job.status.equals("Running") && !job.process.isAlive()) {
+                    job.status = "Done";
+                }
+            }
+
+            // 2. Display only the jobs that just transitioned to 'Done'
+            int numJobsBeforePrompt = backgroundJobs.size();
+            for (int i = 0; i < numJobsBeforePrompt; i++) {
+                BackgroundJob job = backgroundJobs.get(i);
+                if (job.status.equals("Done")) {
+                    char marker = ' ';
+                    if (i == numJobsBeforePrompt - 1) {
+                        marker = '+';
+                    } else if (i == numJobsBeforePrompt - 2) {
+                        marker = '-';
+                    }
+
+                    String formattedStatus = String.format("%-24s", job.status);
+                    System.out.printf("[%d]%c  %s%s%n", job.jobId, marker, formattedStatus, job.command);
+                }
+            }
+
+            // 3. Clean up the 'Done' jobs from our tracking table completely
+            backgroundJobs.removeIf(job -> job.status.equals("Done"));
+
+            // Show the next prompt cleanly
             System.out.print("$ ");
             System.out.flush();
 
@@ -223,7 +250,7 @@ public class Main {
                             Files.write(
                                     Paths.get(errorFile),
                                     (err + System.lineSeparator()).getBytes()
-                        );
+                            );
                         }
                     } else {
                         System.out.println(err);
@@ -272,6 +299,7 @@ public class Main {
             }
 
             if (cmd.equals("jobs")) {
+                // --- POINT 2: Reaping Inside the jobs Builtin ---
                 // 1. Scan and capture completed jobs asynchronously first
                 for (BackgroundJob job : backgroundJobs) {
                     if (job.status.equals("Running") && !job.process.isAlive()) {
@@ -282,7 +310,7 @@ public class Main {
                 StringBuilder jobsOutput = new StringBuilder();
                 int numJobs = backgroundJobs.size();
 
-                // 2. Generate visualization with contextual dynamic markers
+                // 2. Generate visualization with contextual dynamic markers for ALL jobs
                 for (int i = 0; i < numJobs; i++) {
                     BackgroundJob job = backgroundJobs.get(i);
                     
@@ -321,7 +349,7 @@ public class Main {
                     }
                 }
 
-                // 3. Reap completed 'Done' items from tracking list *after* displaying them once
+                // 3. Remove completed 'Done' items from tracking list after displaying them once
                 backgroundJobs.removeIf(job -> job.status.equals("Done"));
 
                 continue;
